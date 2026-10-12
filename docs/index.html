@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Où vivre en IDF</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --hairline: #e1e0d9;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #2a78d6;
+    --track: #ecebe6;
+    --shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --hairline: #2c2c2a;
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #3987e5;
+      --track: #2c2c2a;
+      --shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --hairline: #2c2c2a;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --track: #2c2c2a;
+    --shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--hairline);
+    z-index: 1000;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 650; white-space: nowrap; }
+  header h1 span { color: var(--muted); font-weight: 400; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+  select, input[type="search"], button {
+    font: inherit; color: var(--ink);
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    min-height: 34px;
+  }
+  button { cursor: pointer; }
+  button:hover, select:hover { border-color: var(--muted); }
+  input[type="search"] { width: 200px; }
+  .search { position: relative; }
+  .suggestions {
+    position: absolute; top: 100%; left: 0; right: 0; margin: 4px 0 0; padding: 4px;
+    list-style: none; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: var(--shadow); max-height: 280px; overflow: auto; z-index: 1100;
+  }
+  .suggestions li { padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  .suggestions li[aria-selected="true"], .suggestions li:hover { background: var(--track); }
+  .suggestions small { color: var(--muted); }
+
+  main { position: relative; min-height: 0; min-width: 0; overflow: hidden; }
+  #map { position: absolute; inset: 0; background: var(--page); }
+
+  /* panneaux flottants */
+  .panel {
+    position: absolute; z-index: 900;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow);
+  }
+  #legend { left: 16px; bottom: 24px; padding: 10px 12px; width: 240px; }
+  #legend .title { font-weight: 600; margin-bottom: 6px; }
+  #legend .bar { height: 10px; border-radius: 5px; }
+  #legend .ticks { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  #legend .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+  #side {
+    top: 16px; right: 16px; width: 330px; max-height: calc(100% - 32px);
+    overflow: auto; padding: 14px 16px;
+  }
+  #side[hidden] { display: none; }
+  #side h2 { margin: 0 0 2px; font-size: 18px; }
+  #side .sub { color: var(--ink-2); margin-bottom: 10px; }
+  #side .close { position: absolute; top: 8px; right: 8px; border: none; background: none; font-size: 18px; padding: 4px 8px; min-height: 0; color: var(--muted); }
+  .big { display: flex; align-items: baseline; gap: 6px; margin: 4px 0 12px; }
+  .big b { font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .big span { color: var(--muted); }
+  .chip { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1px solid var(--border); }
+
+  .crit { display: grid; grid-template-columns: 112px 1fr 32px; align-items: center; gap: 8px; padding: 3px 0; }
+  .crit .label { color: var(--ink-2); }
+  .crit .track { display: block; height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
+  .crit .fill { display: block; height: 100%; border-radius: 4px; }
+  .crit .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .crit.active .label { color: var(--ink); font-weight: 600; }
+  .raw { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); color: var(--ink-2); font-size: 13px; }
+  .raw div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+  .raw div span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .ext { display: inline-block; margin-top: 12px; color: var(--accent); }
+
+  #weights { top: 16px; left: 16px; width: 290px; padding: 12px 14px; }
+  #weights[hidden] { display: none; }
+  #weights h3 { margin: 0 0 8px; font-size: 14px; }
+  #weights .row { display: grid; grid-template-columns: 112px 1fr 24px; gap: 8px; align-items: center; padding: 2px 0; }
+  #weights .row span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  #weights input[type="range"] { width: 100%; accent-color: var(--accent); }
+  #weights .actions { display: flex; justify-content: space-between; margin-top: 8px; }
+
+  #ranking { top: 16px; right: 16px; width: 330px; max-height: calc(100% - 32px); overflow: auto; padding: 12px 14px; }
+  #ranking[hidden] { display: none; }
+  #ranking h3 { margin: 0 0 8px; font-size: 14px; }
+  #ranking table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  #ranking td { padding: 4px 4px; border-bottom: 1px solid var(--hairline); }
+  #ranking td:first-child { color: var(--muted); width: 36px; }
+  #ranking td:last-child { text-align: right; font-weight: 600; }
+  #ranking tr { cursor: pointer; }
+  #ranking tr:hover td { background: var(--track); }
+  #ranking .tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  #ranking .tabs button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  #about { position: absolute; inset: 0; z-index: 1200; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; }
+  #about[hidden] { display: none; }
+  #about .card { max-width: 680px; max-height: 100%; overflow: auto; padding: 20px 24px; }
+  #about h2 { margin-top: 0; }
+  #about table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  #about td { border-bottom: 1px solid var(--hairline); padding: 6px 6px; vertical-align: top; }
+  #about td:first-child { font-weight: 600; white-space: nowrap; }
+  #about a { color: var(--accent); }
+
+  /* tooltip Leaflet */
+  .leaflet-tooltip.city-tip {
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
+    padding: 10px 12px; width: 280px; white-space: normal; font: inherit;
+  }
+  .leaflet-tooltip.city-tip::before { display: none; }
+  .city-tip h4 { margin: 0; font-size: 15px; }
+  .city-tip .sub { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .city-tip .big { margin: 2px 0 8px; }
+  .city-tip .big b { font-size: 24px; }
+  .city-tip .crit { grid-template-columns: 104px 1fr 28px; padding: 2px 0; font-size: 13px; }
+  .city-tip .foot { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .leaflet-container { font: inherit; }
+  .osm-tiles { filter: grayscale(1) contrast(0.9) brightness(1.05); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .osm-tiles { filter: grayscale(1) invert(1) brightness(0.85) contrast(0.9); } }
+  :root[data-theme="dark"] .osm-tiles { filter: grayscale(1) invert(1) brightness(0.85) contrast(0.9); }
+  .leaflet-control-attribution { font-size: 11px; }
+  .leaflet-bar a { background: var(--surface); color: var(--ink); border-color: var(--hairline); }
+
+  @media (max-width: 640px) {
+    header h1 span { display: none; }
+    .controls { margin-left: 0; width: 100%; }
+    input[type="search"] { width: 100%; }
+    .search { flex: 1 1 100%; }
+    #legend { left: 8px; bottom: 16px; width: 200px; }
+    #side, #ranking { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 55%; }
+    #weights { left: 8px; right: 8px; width: auto; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Où vivre en IDF <span>· notes des communes d'Île-de-France d'après l'open data</span></h1>
+  <div class="controls">
+    <label for="crit">Colorer par</label>
+    <select id="crit" aria-label="Critère affiché"></select>
+    <div class="search">
+      <input id="q" type="search" placeholder="Rechercher une commune…" autocomplete="off" aria-label="Rechercher une commune">
+      <ul id="sugg" class="suggestions" hidden></ul>
+    </div>
+    <button id="btn-weights" aria-expanded="false">Pondérations</button>
+    <button id="btn-rank" aria-expanded="false">Classement</button>
+    <button id="btn-about">Méthode</button>
+  </div>
+</header>
+<main>
+  <div id="map"></div>
+
+  <div id="legend" class="panel" aria-live="polite">
+    <div class="title" id="legend-title">Note globale</div>
+    <div class="bar" id="legend-bar"></div>
+    <div class="ticks"><span id="lg-lo"></span><span id="lg-mid"></span><span id="lg-hi"></span></div>
+    <div class="hint">Survolez une commune pour le détail, cliquez pour l'épingler.</div>
+  </div>
+
+  <section id="weights" class="panel" hidden>
+    <h3>Importance de chaque critère dans la note globale</h3>
+    <div id="weights-rows"></div>
+    <div class="actions">
+      <button id="weights-reset">Réinitialiser</button>
+      <button id="weights-close">Fermer</button>
+    </div>
+  </section>
+
+  <section id="ranking" class="panel" hidden>
+    <h3 id="ranking-title">Classement</h3>
+    <div class="tabs">
+      <button data-order="top" aria-pressed="true">Meilleures</button>
+      <button data-order="bottom" aria-pressed="false">Moins bien notées</button>
+      <button id="ranking-close" style="margin-left:auto">✕</button>
+    </div>
+    <table><tbody id="ranking-body"></tbody></table>
+  </section>
+
+  <aside id="side" class="panel" hidden></aside>
+
+  <div id="about" hidden>
+    <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="about-title">
+      <h2 id="about-title">Comment les notes sont calculées</h2>
+      <p>Chaque critère est mesuré à partir de données publiques, puis ramené sur 10 : 0 correspond aux communes les moins bien placées d'Île-de-France (2e percentile), 10 aux mieux placées (98e percentile). La note globale est la moyenne pondérée des 8 critères ; les pondérations sont réglables.</p>
+      <p>Sur la carte, le gris correspond à la médiane des communes d'Île-de-France pour le critère affiché : rouge = en dessous, bleu = au-dessus.</p>
+      <p>Ce ne sont <strong>pas</strong> des avis d'habitants : ce sont des indicateurs mesurés, qui ne disent rien de l'ambiance, du bruit ou du prix du logement.</p>
+      <table>
+        <tr><td>Sécurité</td><td>Taux de délinquance pour 1 000 habitants, moyenne 2023-2025 (violences hors famille, vols, cambriolages, dégradations), échelle logarithmique. Source : SSMSI, ministère de l'Intérieur. Les communes très fréquentées (commerces, gares, tourisme) sont pénalisées car les faits sont rapportés aux seuls résidents.</td></tr>
+        <tr><td>Enseignement</td><td>Moyenne de l'indice de position sociale des écoles (2024-2025) et de la note à l'écrit du brevet des collèges (2025). Communes sans école : moyenne des 3 communes voisines. Source : Éducation nationale.</td></tr>
+        <tr><td>Transports</td><td>Gares de train, RER, métro et tram accessibles autour de la commune (pondérées par mode, rayon ~1 km) pour 75 %, distance à Paris-Châtelet pour 25 %. Source : Île-de-France Mobilités.</td></tr>
+        <tr><td>Santé</td><td>Établissements et professionnels de santé accessibles (rayon ~2 km), pour moitié en nombre et pour moitié rapportés à la population du secteur. Source : INSEE, Base permanente des équipements 2025.</td></tr>
+        <tr><td>Commerces</td><td>Commerces accessibles (rayon ~1 km). Source : INSEE BPE 2025.</td></tr>
+        <tr><td>Environnement</td><td>Part de la surface non artificialisée (OCS GE, Cerema). Pour les arrondissements de Paris : part d'espaces verts publics, bois de Boulogne et de Vincennes inclus (Paris Open Data).</td></tr>
+        <tr><td>Sports et loisirs</td><td>Équipements sportifs et de loisirs (rayon ~2 km), pour moitié en nombre et pour moitié par habitant. Source : INSEE BPE 2025.</td></tr>
+        <tr><td>Culture</td><td>Cinémas, théâtres, musées, bibliothèques, conservatoires (rayon ~3 km). Source : INSEE BPE 2025.</td></tr>
+      </table>
+      <h3>Sources et licences</h3>
+      <ul>
+        <li>Délinquance enregistrée : ministère de l'Intérieur – SSMSI, édition juillet 2026, <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/">Licence Ouverte 2.0</a>.</li>
+        <li>Base permanente des équipements 2025 : INSEE, Licence Ouverte 2.0.</li>
+        <li>IPS des écoles et des collèges, indicateurs de valeur ajoutée des collèges : ministère de l'Éducation nationale, Licence Ouverte 2.0.</li>
+        <li>Gares et stations : Île-de-France Mobilités, Licence Ouverte 2.0.</li>
+        <li>Artificialisation des sols (OCS GE) : Mon diagnostic artificialisation / Cerema, Licence Ouverte 2.0.</li>
+        <li>Espaces verts : Ville de Paris, <a href="https://opendatacommons.org/licenses/odbl/">Open Database License (ODbL)</a>.</li>
+        <li>Contours des communes : IGN Admin Express via geo.api.gouv.fr, Licence Ouverte 2.0.</li>
+        <li>Fond de carte : © IGN – Géoplateforme (Plan IGN v2), Licence Ouverte 2.0.</li>
+      </ul>
+      <p>Données téléchargées en octobre 2026 ; les notes sont un traitement de ces données, et n'engagent pas leurs producteurs.</p>
+      <p>Projet personnel, sans lien avec ville-ideale.fr. Le lien « Voir les avis » renvoie simplement vers leur site, qui recueille les notes des habitants.</p>
+      <button id="about-close">Fermer</button>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="data.js"></script>
+<script>
+(() => {
+  const CRITERIA = [
+    ["securite", "Sécurité"],
+    ["enseignement", "Enseignement"],
+    ["transports", "Transports"],
+    ["sante", "Santé"],
+    ["commerces", "Commerces"],
+    ["environnement", "Environnement"],
+    ["sports_loisirs", "Sports et loisirs"],
+    ["culture", "Culture"],
+  ];
+  const LABEL = Object.fromEntries([["globale", "Note globale"], ...CRITERIA]);
+  const DEP_NAMES = { "75": "Paris", "77": "Seine-et-Marne", "78": "Yvelines", "91": "Essonne",
+    "92": "Hauts-de-Seine", "93": "Seine-Saint-Denis", "94": "Val-de-Marne", "95": "Val-d'Oise" };
+
+  // ---------------------------------------------------------------- couleurs
+  // Divergent rouge (mauvais) -> gris neutre (5/10) -> bleu (bon). Pas de rouge/vert : illisible pour les daltoniens.
+  const STOPS = {
+    light: [[0, "#8f2424"], [2.5, "#d9534f"], [4.2, "#f1b3ab"], [5, "#f0efec"], [5.8, "#b7d3f6"], [7.5, "#5598e7"], [10, "#184f95"]],
+    dark:  [[0, "#c43a3a"], [2.5, "#e66767"], [4.2, "#9b5552"], [5, "#4a4a46"], [5.8, "#3d5f8f"], [7.5, "#3987e5"], [10, "#86b6ef"]],
+  };
+  const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const isDark = () => {
+    const t = document.documentElement.dataset.theme;
+    if (t) return t === "dark";
+    return matchMedia("(prefers-color-scheme: dark)").matches;
+  };
+  // Domaine de couleur par critère : 2e percentile -> médiane IDF (gris) -> 98e percentile
+  const scales = {};
+  const quantile = (arr, q) => { const i = (arr.length - 1) * q, lo = Math.floor(i); return arr[lo] + (arr[Math.ceil(i)] - arr[lo]) * (i - lo); };
+  function computeScales() {
+    for (const k of Object.keys(LABEL)) {
+      const vals = features.map(f => f.properties.notes[k]).filter(v => v != null).sort((a, b) => a - b);
+      const s = { lo: quantile(vals, 0.02), mid: quantile(vals, 0.5), hi: quantile(vals, 0.98) };
+      if (s.mid - s.lo < 0.1) s.lo = s.mid - 0.1;
+      if (s.hi - s.mid < 0.1) s.hi = s.mid + 0.1;
+      scales[k] = s;
+    }
+  }
+  function colorFor(v, k = current) {
+    if (v == null || isNaN(v)) return isDark() ? "#2c2c2a" : "#e1e0d9";
+    const { lo, mid, hi } = scales[k];
+    const t = v <= mid ? 5 * Math.max(0, (v - lo) / (mid - lo)) : 5 + 5 * Math.min(1, (v - mid) / (hi - mid));
+    return rampColor(t);
+  }
+  function rampColor(v) {
+    const stops = STOPS[isDark() ? "dark" : "light"];
+    for (let i = 1; i < stops.length; i++) {
+      const [v1, c1] = stops[i];
+      if (v <= v1) {
+        const [v0, c0] = stops[i - 1];
+        const t = (v - v0) / (v1 - v0);
+        const a = hex2rgb(c0), b = hex2rgb(c1);
+        return `rgb(${a.map((x, k) => Math.round(x + (b[k] - x) * t)).join(",")})`;
+      }
+    }
+    return stops[stops.length - 1][1];
+  }
+  const gradientCss = () => "linear-gradient(to right," +
+    STOPS[isDark() ? "dark" : "light"].map(([v, c]) => `${c} ${v * 10}%`).join(",") + ")";
+
+  // ---------------------------------------------------------------- état
+  const DEFAULT_WEIGHTS = Object.fromEntries(CRITERIA.map(([k]) => [k, 1]));
+  let weights = { ...DEFAULT_WEIGHTS };
+  try { Object.assign(weights, JSON.parse(localStorage.getItem("vi-weights") || "{}")); } catch (e) {}
+  let current = "globale";
+  let pinned = null;
+  let rankOrder = "top";
+
+  const features = window.IDF_DATA.features;
+  const byCode = new Map(features.map(f => [f.properties.code, f]));
+
+  function recomputeGlobal() {
+    const total = Object.values(weights).reduce((a, b) => a + b, 0);
+    for (const f of features) {
+      const n = f.properties.notes;
+      n.globale = total ? Math.round(CRITERIA.reduce((s, [k]) => s + n[k] * weights[k], 0) / total * 10) / 10 : null;
+    }
+  }
+  recomputeGlobal();
+  computeScales();
+
+  const fmt = v => v == null ? "–" : v.toFixed(1).replace(".", ",");
+  const fmtInt = v => v.toLocaleString("fr-FR");
+
+  // ---------------------------------------------------------------- carte
+  const map = L.map("map", { preferCanvas: true, zoomControl: true, minZoom: 8, maxZoom: 16 })
+    .setView([48.75, 2.5], 9);
+  // Plan IGN (Géoplateforme) : public, sans clé, et accepte les pages ouvertes en local (file://)
+  L.tileLayer("https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png", {
+    maxZoom: 19, className: "osm-tiles",
+    attribution: '&copy; <a href="https://www.ign.fr/">IGN</a> – Géoplateforme',
+  }).addTo(map);
+  // De près, on laisse voir les rues sous les couleurs
+  const fillOpacity = () => map.getZoom() >= 13 ? 0.35 : map.getZoom() >= 11 ? 0.6 : 0.8;
+  map.on("zoomend", () => refreshStyles());
+
+  const styleFor = f => ({
+    fillColor: colorFor(f.properties.notes[current]),
+    fillOpacity: fillOpacity(),
+    color: isDark() ? "#1a1a19" : "#fcfcfb",
+    weight: 0.6,
+  });
+
+  const layer = L.geoJSON(window.IDF_DATA, {
+    style: styleFor,
+    onEachFeature: (f, l) => {
+      l.bindTooltip(() => tooltipHtml(f.properties), { sticky: true, direction: "auto", className: "city-tip", offset: [16, 0], opacity: 1 });
+      l.on({
+        mouseover: () => { l.setStyle({ weight: 2.5, color: isDark() ? "#f0efec" : "#0b0b0b" }); l.bringToFront(); },
+        mouseout: () => { if (pinned !== f.properties.code) layer.resetStyle(l); },
+        click: () => pin(f.properties.code, false),
+      });
+    },
+  }).addTo(map);
+  const layerByCode = new Map();
+  layer.eachLayer(l => layerByCode.set(l.feature.properties.code, l));
+  map.fitBounds(layer.getBounds(), { padding: [10, 10] });
+
+  function refreshStyles() {
+    layer.setStyle(styleFor);
+    if (pinned) layerByCode.get(pinned).setStyle({ weight: 2.5, color: isDark() ? "#f0efec" : "#0b0b0b" });
+    document.getElementById("legend-bar").style.background = gradientCss();
+    document.getElementById("legend-title").textContent = LABEL[current] + " (sur 10)";
+    const s = scales[current];
+    document.getElementById("lg-lo").textContent = "≤ " + fmt(s.lo);
+    document.getElementById("lg-mid").textContent = "médiane IDF " + fmt(s.mid);
+    document.getElementById("lg-hi").textContent = "≥ " + fmt(s.hi);
+  }
+
+  // ---------------------------------------------------------------- contenu
+  function bars(n, active) {
+    return CRITERIA.map(([k, label]) => `
+      <div class="crit${k === active ? " active" : ""}">
+        <span class="label">${label}</span>
+        <span class="track"><span class="fill" style="width:${n[k] * 10}%;background:${colorFor(n[k], k)}"></span></span>
+        <span class="val">${fmt(n[k])}</span>
+      </div>`).join("");
+  }
+  const subtitle = p => `${DEP_NAMES[p.dep] || p.dep} (${p.dep}) · ${fmtInt(p.pop)} hab.`;
+  const headline = (p) => {
+    const v = p.notes[current];
+    return `<div class="big"><span class="chip" style="background:${colorFor(v)}"></span><b>${fmt(v)}</b><span>/ 10 · ${LABEL[current].toLowerCase()}</span></div>`;
+  };
+
+  function tooltipHtml(p) {
+    return `<h4>${p.nom}</h4><div class="sub">${subtitle(p)}</div>${headline(p)}
+      ${current !== "globale" ? `<div class="crit"><span class="label">Note globale</span><span></span><span class="val">${fmt(p.notes.globale)}</span></div>` : ""}
+      ${bars(p.notes, current)}
+      <div class="foot">Cliquez pour plus de détails</div>`;
+  }
+
+  function slug(s) {
+    return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+  const villeIdealeUrl = p => `https://www.ville-ideale.fr/${slug(p.nom)}_${p.code}`;
+
+  function sideHtml(p) {
+    const b = p.brut;
+    const rows = [
+      ["Délinquance (faits / 1 000 hab.)", b.crimes_pour_mille == null ? "–" : fmt(b.crimes_pour_mille)],
+      ["Indice de position sociale des écoles", fmt(b.ips_ecoles)],
+      ["Note moyenne à l'écrit du brevet", b.note_ecrit_dnb == null ? "–" : fmt(b.note_ecrit_dnb) + " / 20"],
+      [p.dep === "75" ? "Part d'espaces verts publics" : "Surface non artificialisée", b.pct_non_artificialise == null ? "–" : fmt(b.pct_non_artificialise) + " %"],
+      ["Distance à Châtelet", fmt(b.dist_paris_km) + " km"],
+    ];
+    return `<button class="close" aria-label="Fermer">✕</button>
+      <h2>${p.nom}</h2><div class="sub">${subtitle(p)}</div>
+      ${headline(p)}
+      ${current !== "globale" ? `<div class="crit"><span class="label">Note globale</span><span></span><span class="val">${fmt(p.notes.globale)}</span></div>` : ""}
+      ${bars(p.notes, current)}
+      <div class="raw">${rows.map(([k, v]) => `<div><span>${k}</span><span>${v}</span></div>`).join("")}</div>
+      <a class="ext" href="${villeIdealeUrl(p)}" target="_blank" rel="noopener">Voir les avis des habitants sur ville-ideale.fr ↗</a>`;
+  }
+
+  const side = document.getElementById("side");
+  function pin(code, zoom) {
+    if (pinned && layerByCode.has(pinned)) layer.resetStyle(layerByCode.get(pinned));
+    pinned = code;
+    const f = byCode.get(code), l = layerByCode.get(code);
+    l.setStyle({ weight: 2.5, color: isDark() ? "#f0efec" : "#0b0b0b" });
+    l.bringToFront();
+    if (zoom) map.fitBounds(l.getBounds(), { maxZoom: 13, padding: [40, 40] });
+    side.innerHTML = sideHtml(f.properties);
+    side.hidden = false;
+    rankingPanel.hidden = true;
+    btnRank.setAttribute("aria-expanded", "false");
+    side.querySelector(".close").onclick = unpin;
+    history.replaceState(null, "", "#c=" + code);
+  }
+  function unpin() {
+    if (pinned) layer.resetStyle(layerByCode.get(pinned));
+    pinned = null;
+    side.hidden = true;
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  const refreshSide = () => { if (pinned) { side.innerHTML = sideHtml(byCode.get(pinned).properties); side.querySelector(".close").onclick = unpin; } };
+
+  // ---------------------------------------------------------------- critère affiché
+  const sel = document.getElementById("crit");
+  sel.innerHTML = Object.entries(LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  sel.onchange = () => { current = sel.value; refreshStyles(); refreshSide(); renderRanking(); };
+
+  // ---------------------------------------------------------------- recherche
+  const q = document.getElementById("q"), sugg = document.getElementById("sugg");
+  const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const index = features.map(f => ({ code: f.properties.code, nom: f.properties.nom, key: norm(f.properties.nom), pop: f.properties.pop, dep: f.properties.dep }));
+  let active = -1, results = [];
+  function renderSugg() {
+    sugg.innerHTML = results.map((r, i) => `<li role="option" data-code="${r.code}" aria-selected="${i === active}"><span>${r.nom}</span><small>${r.dep}</small></li>`).join("");
+    sugg.hidden = !results.length;
+  }
+  q.addEventListener("input", () => {
+    const k = norm(q.value.trim());
+    results = k.length < 2 ? [] : index.filter(r => r.key.includes(k))
+      .sort((a, b) => (b.key.startsWith(k) - a.key.startsWith(k)) || b.pop - a.pop).slice(0, 8);
+    active = results.length ? 0 : -1;
+    renderSugg();
+  });
+  q.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown") { active = Math.min(active + 1, results.length - 1); renderSugg(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { active = Math.max(active - 1, 0); renderSugg(); e.preventDefault(); }
+    else if (e.key === "Enter" && results[active]) { choose(results[active].code); }
+    else if (e.key === "Escape") { results = []; renderSugg(); }
+  });
+  sugg.addEventListener("mousedown", e => { const li = e.target.closest("li"); if (li) choose(li.dataset.code); });
+  q.addEventListener("blur", () => setTimeout(() => { sugg.hidden = true; }, 150));
+  function choose(code) { q.value = byCode.get(code).properties.nom; results = []; renderSugg(); pin(code, true); }
+
+  // ---------------------------------------------------------------- pondérations
+  const weightsPanel = document.getElementById("weights"), btnWeights = document.getElementById("btn-weights");
+  const wRows = document.getElementById("weights-rows");
+  function renderWeights() {
+    wRows.innerHTML = CRITERIA.map(([k, label]) => `
+      <label class="row"><span>${label}</span>
+        <input type="range" min="0" max="3" step="0.5" value="${weights[k]}" data-k="${k}" aria-label="Poids ${label}">
+        <span>${String(weights[k]).replace(".", ",")}</span></label>`).join("");
+  }
+  renderWeights();
+  wRows.addEventListener("input", e => {
+    const k = e.target.dataset.k; if (!k) return;
+    weights[k] = parseFloat(e.target.value);
+    e.target.nextElementSibling.textContent = String(weights[k]).replace(".", ",");
+    try { localStorage.setItem("vi-weights", JSON.stringify(weights)); } catch (err) {}
+    recomputeGlobal(); computeScales(); refreshStyles(); refreshSide(); renderRanking();
+  });
+  document.getElementById("weights-reset").onclick = () => {
+    weights = { ...DEFAULT_WEIGHTS };
+    try { localStorage.removeItem("vi-weights"); } catch (err) {}
+    renderWeights(); recomputeGlobal(); computeScales(); refreshStyles(); refreshSide(); renderRanking();
+  };
+  const toggleWeights = (open) => { weightsPanel.hidden = !open; btnWeights.setAttribute("aria-expanded", String(open)); };
+  btnWeights.onclick = () => toggleWeights(weightsPanel.hidden);
+  document.getElementById("weights-close").onclick = () => toggleWeights(false);
+
+  // ---------------------------------------------------------------- classement (vue tableau)
+  const rankingPanel = document.getElementById("ranking"), btnRank = document.getElementById("btn-rank");
+  function renderRanking() {
+    if (rankingPanel.hidden) return;
+    const sorted = features.map(f => f.properties).filter(p => p.notes[current] != null)
+      .sort((a, b) => (b.notes[current] - a.notes[current]) || (b.pop - a.pop));
+    const list = rankOrder === "top" ? sorted.slice(0, 50) : sorted.slice(-50).reverse();
+    const offset = rankOrder === "top" ? 0 : sorted.length - 1;
+    document.getElementById("ranking-title").textContent = `Classement · ${LABEL[current]}`;
+    document.getElementById("ranking-body").innerHTML = list.map((p, i) => `
+      <tr data-code="${p.code}"><td>${rankOrder === "top" ? i + 1 : offset - i + 1}</td>
+      <td><span class="chip" style="background:${colorFor(p.notes[current])}"></span>${p.nom} <small style="color:var(--muted)">${p.dep}</small></td>
+      <td>${fmt(p.notes[current])}</td></tr>`).join("");
+  }
+  rankingPanel.addEventListener("click", e => {
+    const tab = e.target.closest("button[data-order]");
+    if (tab) {
+      rankOrder = tab.dataset.order;
+      rankingPanel.querySelectorAll("button[data-order]").forEach(b => b.setAttribute("aria-pressed", String(b === tab)));
+      renderRanking(); return;
+    }
+    const tr = e.target.closest("tr[data-code]");
+    if (tr) pin(tr.dataset.code, true);
+  });
+  btnRank.onclick = () => {
+    const open = rankingPanel.hidden;
+    rankingPanel.hidden = !open; btnRank.setAttribute("aria-expanded", String(open));
+    if (open) { side.hidden = true; renderRanking(); }
+  };
+  document.getElementById("ranking-close").onclick = () => { rankingPanel.hidden = true; btnRank.setAttribute("aria-expanded", "false"); };
+
+  // ---------------------------------------------------------------- méthode
+  const about = document.getElementById("about");
+  document.getElementById("btn-about").onclick = () => { about.hidden = false; };
+  document.getElementById("about-close").onclick = () => { about.hidden = true; };
+  about.addEventListener("click", e => { if (e.target === about) about.hidden = true; });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { about.hidden = true; } });
+
+  // ---------------------------------------------------------------- thème
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    refreshStyles(); refreshSide(); renderRanking();
+  });
+
+  refreshStyles();
+  const fromHash = location.hash.match(/^#c=(\w+)/);
+  if (fromHash && byCode.has(fromHash[1])) pin(fromHash[1], true);
+})();
+</script>
+</body>
+</html>
